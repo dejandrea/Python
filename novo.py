@@ -2,14 +2,14 @@
 
 #definindo a classe
 class Contact_details:
-  #definindo os atributos
+#definindo os atributos
   def __init__(self,name,phoneNumber,email,address):
     self.contactName = name
     self.phoneNumber = phoneNumber
     self.contactEmail = email
     self.contactAddress = address
 
-    #criando um dicionário com os dados 
+#criando um dicionário com os dados 
     self.person = {
         "name":self.contactName,
         "phoneNumber":self.phoneNumber,
