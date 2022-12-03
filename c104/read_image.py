@@ -1,4 +1,4 @@
-# import cv2
+import cv2
 
 # img = cv2.imread("D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/c103/Image_Files/story_image_1.png")
 
@@ -13,7 +13,7 @@
 
 
 import cv2
-from cv2 import waitKey
+
 
 img = cv2.imread("D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/c103/Image_Files/story_image_1.png")
 img2 = cv2.imread("D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/c103/Image_Files/story_image_2.png")
@@ -26,7 +26,7 @@ cv2.imshow("Janela 3",gray_img)
 
 print(img)
 
-waitKey(0)
+cv2.waitKey(0)
 
 
 
