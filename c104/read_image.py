@@ -1,15 +1,15 @@
 import cv2
 
-# img = cv2.imread("D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/c103/Image_Files/story_image_1.png")
+img = cv2.imread("D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/c103/Image_Files/story_image_1.png")
 
-# # cv2.imshow("Imagem de Exibição",img)
-# #cv2.waitKey(0)
-# #print(img)
+# cv2.imshow("Imagem de Exibição",img)
+#cv2.waitKey(0)
+#print(img)
 
-# gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-# # cv2.imshow("Escala de cinza",gray_img)
-# # cv2.waitKey(0)
-# # print(gray_img)
+gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+# cv2.imshow("Escala de cinza",gray_img)
+# cv2.waitKey(0)
+# print(gray_img)
 
 
 import cv2
