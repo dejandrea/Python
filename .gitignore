@@ -287,4 +287,7 @@ pip-selfcheck.json
 .history
 .ionide
 
+node_modules
+.expo
+
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,venv,flask
