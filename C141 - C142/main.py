@@ -1,7 +1,9 @@
 from flask import Flask, jsonify, request
+from demographic_filtering import output
+from content_filtering import get_recommendations
 import pandas as pd
 
-movies_data = pd.read_csv('D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/C141/final.csv')
+movies_data = pd.read_csv('D:/Documentos/BYJUS/AulasVScode/Aulas/Alunos/Aluno 0/Python/C141 - C142/final.csv')
 
 app = Flask(__name__)
 
@@ -69,6 +71,57 @@ def did_not_watch_view():
     all_movies=all_movies.reset_index(drop=True)
     
     return jsonify({
+        "status": "success"
+    })
+
+#filmes populares
+@app.route("/popular_movies")
+def popular_movies():
+    popular_movie_data = []
+
+    for index, row in output.iterrows():
+        _p = {
+            "original_title": row['original_title'],
+            "poster_link":row['poster_link'],
+            "release_date":row['release_date'] or "N/A",
+            "duration": row['runtime'],
+            "rating": row['weighted_rating']/2
+        }
+        popular_movie_data.append(_p)
+
+    return jsonify({
+        "data": popular_movie_data,
+        "status": "success"
+    })
+
+
+#Filmes recomendados baseado nos filmes curtidos
+@app.route("/recommended_movies")
+def recommended_movies():
+    global liked_movies
+    col_names=['original_title', 'poster_link', 'release_date', 'runtime', 'weighted_rating']
+    all_recommended = pd.DataFrame(columns=col_names)
+    
+    for liked_movie in liked_movies:
+        output = get_recommendations(liked_movie["original_title"])
+        all_recommended=all_recommended.append(output)
+
+    all_recommended.drop_duplicates(subset=["original_title"],inplace=True)
+
+    recommended_movie_data=[]
+
+    for index, row in all_recommended.iterrows():
+        _p = {
+            "original_title": row["original_title"],
+            "poster_link":row['poster_link'],
+            "release_date":row['release_date'] or "N/A",
+            "duration": row['runtime'],
+            "rating": row['weighted_rating']/2
+        }
+        recommended_movie_data.append(_p)
+
+    return jsonify({
+        "data":recommended_movie_data,
         "status": "success"
     })
 
