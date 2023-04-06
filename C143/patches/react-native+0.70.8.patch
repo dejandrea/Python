@@ -1,0 +1,1504 @@
+diff --git a/node_modules/react-native/Libraries/Blob/Blob.js b/node_modules/react-native/Libraries/Blob/Blob.js
+index b279a03..862c3f5 100644
+--- a/node_modules/react-native/Libraries/Blob/Blob.js
++++ b/node_modules/react-native/Libraries/Blob/Blob.js
+@@ -105,6 +105,12 @@ class Blob {
+       blobId: this.data.blobId,
+       offset,
+       size,
++      /* Since `blob.slice()` creates a new view onto the same binary
++       * data as the original blob, we should re-use the same collector
++       * object so that the underlying resource gets deallocated when
++       * the last view into the data is released, not the first.
++       */
++      __collector: this.data.__collector,
+     });
+   }
+ 
+diff --git a/node_modules/react-native/Libraries/Core/ReactNativeVersion.js b/node_modules/react-native/Libraries/Core/ReactNativeVersion.js
+index 339e616..2f85e61 100644
+--- a/node_modules/react-native/Libraries/Core/ReactNativeVersion.js
++++ b/node_modules/react-native/Libraries/Core/ReactNativeVersion.js
+@@ -12,6 +12,6 @@
+ exports.version = {
+   major: 0,
+   minor: 70,
+-  patch: 5,
++  patch: 8,
+   prerelease: null,
+ };
+diff --git a/node_modules/react-native/Libraries/PermissionsAndroid/PermissionsAndroid.js b/node_modules/react-native/Libraries/PermissionsAndroid/PermissionsAndroid.js
+index 389f7b7..0f04c5c 100644
+--- a/node_modules/react-native/Libraries/PermissionsAndroid/PermissionsAndroid.js
++++ b/node_modules/react-native/Libraries/PermissionsAndroid/PermissionsAndroid.js
+@@ -74,7 +74,8 @@ const PERMISSIONS = Object.freeze({
+   ANSWER_PHONE_CALLS: 'android.permission.ANSWER_PHONE_CALLS',
+   READ_PHONE_NUMBERS: 'android.permission.READ_PHONE_NUMBERS',
+   UWB_RANGING: 'android.permission.UWB_RANGING',
+-  POST_NOTIFICATION: 'android.permission.POST_NOTIFICATIONS',
++  POST_NOTIFICATION: 'android.permission.POST_NOTIFICATIONS', // Remove in 0.72
++  POST_NOTIFICATIONS: 'android.permission.POST_NOTIFICATIONS',
+   NEARBY_WIFI_DEVICES: 'android.permission.NEARBY_WIFI_DEVICES',
+ });
+ 
+@@ -105,7 +106,8 @@ class PermissionsAndroid {
+     CAMERA: string,
+     GET_ACCOUNTS: string,
+     NEARBY_WIFI_DEVICES: string,
+-    POST_NOTIFICATION: string,
++    POST_NOTIFICATION: string, // Remove in 0.72
++    POST_NOTIFICATIONS: string,
+     PROCESS_OUTGOING_CALLS: string,
+     READ_CALENDAR: string,
+     READ_CALL_LOG: string,
+diff --git a/node_modules/react-native/React/Base/RCTVersion.m b/node_modules/react-native/React/Base/RCTVersion.m
+index b9d3e42..040ddc5 100644
+--- a/node_modules/react-native/React/Base/RCTVersion.m
++++ b/node_modules/react-native/React/Base/RCTVersion.m
+@@ -23,7 +23,7 @@ NSDictionary* RCTGetReactNativeVersion(void)
+     __rnVersion = @{
+                   RCTVersionMajor: @(0),
+                   RCTVersionMinor: @(70),
+-                  RCTVersionPatch: @(5),
++                  RCTVersionPatch: @(8),
+                   RCTVersionPrerelease: [NSNull null],
+                   };
+   });
+diff --git a/node_modules/react-native/React/Views/RCTModalHostViewManager.m b/node_modules/react-native/React/Views/RCTModalHostViewManager.m
+index 7fab70e..4b9f9ad 100644
+--- a/node_modules/react-native/React/Views/RCTModalHostViewManager.m
++++ b/node_modules/react-native/React/Views/RCTModalHostViewManager.m
+@@ -75,13 +75,15 @@ RCT_EXPORT_MODULE()
+       modalHostView.onShow(nil);
+     }
+   };
+-  if (_presentationBlock) {
+-    _presentationBlock([modalHostView reactViewController], viewController, animated, completionBlock);
+-  } else {
+-    [[modalHostView reactViewController] presentViewController:viewController
+-                                                      animated:animated
+-                                                    completion:completionBlock];
+-  }
++  dispatch_async(dispatch_get_main_queue(), ^{
++    if (self->_presentationBlock) {
++      self->_presentationBlock([modalHostView reactViewController], viewController, animated, completionBlock);
++    } else {
++      [[modalHostView reactViewController] presentViewController:viewController
++                                                        animated:animated
++                                                      completion:completionBlock];
++    }
++  });
+ }
+ 
+ - (void)dismissModalHostView:(RCTModalHostView *)modalHostView
+@@ -93,11 +95,13 @@ RCT_EXPORT_MODULE()
+       [[self.bridge moduleForClass:[RCTModalManager class]] modalDismissed:modalHostView.identifier];
+     }
+   };
+-  if (_dismissalBlock) {
+-    _dismissalBlock([modalHostView reactViewController], viewController, animated, completionBlock);
+-  } else {
+-    [viewController.presentingViewController dismissViewControllerAnimated:animated completion:completionBlock];
+-  }
++  dispatch_async(dispatch_get_main_queue(), ^{
++    if (self->_dismissalBlock) {
++      self->_dismissalBlock([modalHostView reactViewController], viewController, animated, completionBlock);
++    } else {
++      [viewController.presentingViewController dismissViewControllerAnimated:animated completion:completionBlock];
++    }
++  });
+ }
+ 
+ - (RCTShadowView *)shadowView
+diff --git a/node_modules/react-native/ReactAndroid/gradle.properties b/node_modules/react-native/ReactAndroid/gradle.properties
+index d9d07d9..5e5bab1 100644
+--- a/node_modules/react-native/ReactAndroid/gradle.properties
++++ b/node_modules/react-native/ReactAndroid/gradle.properties
+@@ -1,4 +1,4 @@
+-VERSION_NAME=0.70.5
++VERSION_NAME=0.70.8
+ GROUP=com.facebook.react
+ 
+ POM_NAME=ReactNative
+diff --git a/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/modules/systeminfo/ReactNativeVersion.java b/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/modules/systeminfo/ReactNativeVersion.java
+index 0af698f..6cb9a20 100644
+--- a/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/modules/systeminfo/ReactNativeVersion.java
++++ b/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/modules/systeminfo/ReactNativeVersion.java
+@@ -17,6 +17,6 @@ public class ReactNativeVersion {
+   public static final Map<String, Object> VERSION = MapBuilder.<String, Object>of(
+       "major", 0,
+       "minor", 70,
+-      "patch", 5,
++      "patch", 8,
+       "prerelease", null);
+ }
+diff --git a/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.java b/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.java
+index 4847b9b..77ab6bb 100644
+--- a/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.java
++++ b/node_modules/react-native/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.java
+@@ -555,6 +555,10 @@ public class ReactEditText extends AppCompatEditText
+         new SpannableStringBuilder(reactTextUpdate.getText());
+ 
+     manageSpans(spannableStringBuilder, reactTextUpdate.mContainsMultipleFragments);
++
++    // Mitigation for https://github.com/facebook/react-native/issues/35936 (S318090)
++    stripAbsoluteSizeSpans(spannableStringBuilder);
++
+     mContainsImages = reactTextUpdate.containsImages();
+ 
+     // When we update text, we trigger onChangeText code that will
+@@ -628,6 +632,27 @@ public class ReactEditText extends AppCompatEditText
+     }
+   }
+ 
++  private void stripAbsoluteSizeSpans(SpannableStringBuilder sb) {
++    // We have already set a font size on the EditText itself. We can safely remove sizing spans
++    // which are the same as the set font size, and not otherwise overlapped.
++    final int effectiveFontSize = mTextAttributes.getEffectiveFontSize();
++    ReactAbsoluteSizeSpan[] spans = sb.getSpans(0, sb.length(), ReactAbsoluteSizeSpan.class);
++
++    outerLoop:
++    for (ReactAbsoluteSizeSpan span : spans) {
++      ReactAbsoluteSizeSpan[] overlappingSpans =
++          sb.getSpans(sb.getSpanStart(span), sb.getSpanEnd(span), ReactAbsoluteSizeSpan.class);
++
++      for (ReactAbsoluteSizeSpan overlappingSpan : overlappingSpans) {
++        if (span.getSize() != effectiveFontSize) {
++          continue outerLoop;
++        }
++      }
++
++      sb.removeSpan(span);
++    }
++  }
++
+   private static boolean sameTextForSpan(
+       final Editable oldText,
+       final SpannableStringBuilder newText,
+diff --git a/node_modules/react-native/ReactAndroid/src/main/jni/first-party/fbjni/.npmignore b/node_modules/react-native/ReactAndroid/src/main/jni/first-party/fbjni/.gitignore
+similarity index 100%
+rename from node_modules/react-native/ReactAndroid/src/main/jni/first-party/fbjni/.npmignore
+rename to node_modules/react-native/ReactAndroid/src/main/jni/first-party/fbjni/.gitignore
+diff --git a/node_modules/react-native/ReactCommon/cxxreact/ReactNativeVersion.h b/node_modules/react-native/ReactCommon/cxxreact/ReactNativeVersion.h
+index 1da13a5..3aaa761 100644
+--- a/node_modules/react-native/ReactCommon/cxxreact/ReactNativeVersion.h
++++ b/node_modules/react-native/ReactCommon/cxxreact/ReactNativeVersion.h
+@@ -17,7 +17,7 @@ namespace facebook::react {
+ constexpr struct {
+   int32_t Major = 0;
+   int32_t Minor = 70;
+-  int32_t Patch = 5;
++  int32_t Patch = 8;
+   std::string_view Prerelease = "";
+ } ReactNativeVersion;
+ 
+diff --git a/node_modules/react-native/ReactCommon/hermes/inspector/tools/msggen/.npmignore b/node_modules/react-native/ReactCommon/hermes/inspector/tools/msggen/.gitignore
+similarity index 100%
+rename from node_modules/react-native/ReactCommon/hermes/inspector/tools/msggen/.npmignore
+rename to node_modules/react-native/ReactCommon/hermes/inspector/tools/msggen/.gitignore
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar
+deleted file mode 100644
+index 5723e1f..0000000
+Binary files a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar and /dev/null differ
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.md5
+deleted file mode 100644
+index 0d34886..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-8f67048d84e52b2c37b14459567a5a9d
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha1
+deleted file mode 100644
+index 2fa63ef..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-f246204e16175a16e94ddab8556b5980c6241d14
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha256
+deleted file mode 100644
+index a366acb..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-98edd89a8c6b428921a71c83353b7c2ead7561ef78390d3d2f8bdec7ea0bccba
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha512
+deleted file mode 100644
+index b8b843c..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug.aar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-ccbb56a7ba17357aa68c9ba685f118acae462481c186ba2e18a5dff3a779fb6cf1b6557965777282625b1fea8a82336ee3d6166d226ac494413770ade3369402
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar
+deleted file mode 100644
+index 13ad1c5..0000000
+Binary files a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar and /dev/null differ
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.md5
+deleted file mode 100644
+index 07e91ce..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-4eea565acfa26284caefb83ea547a27d
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha1
+deleted file mode 100644
+index 08dc4b9..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-6d67ef0ee827fb500c5dae6e8de8497b7513b51f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha256
+deleted file mode 100644
+index 5b262a1..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-3cf7d55a8e2a610cb293d91acc90881114df0150aea5bb19b2df78158c331134
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha512
+deleted file mode 100644
+index a93539c..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release.aar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-f114d26c0c757a2a333423738861dfcd225a790ba97a3a140e21cd131e9cf1c8cdc9e78372c735b6dc8f8ca004cf38e7b75b3c07afef5230fba7b57e71d332b3
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.md5
+deleted file mode 100644
+index ad1706d..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-4ff83d5a836dec90593a9de87e02b66f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha1
+deleted file mode 100644
+index 8af82fe..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-b5236e1fc7e7d9e5ddf5219e8a6bb08a0237d9da
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha256
+deleted file mode 100644
+index 539e637..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-4e27316d4f981093d6f73885dcdc5e64dc23a18ad892d68cf7b7fc22cdfc598d
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha512
+deleted file mode 100644
+index 5e22762..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-8b5d314a29a4a5d578a43a7a5b8243736247084af2e36eb4830050fd29103ed930a3a6f8d1dfa68f3be226891f14d2e56e8122a4fef9c28464cbbcd1e52a6204
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.md5
+deleted file mode 100644
+index 680fc0a..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-9182f5e678c542dba36f6bc0168d49a9
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha1
+deleted file mode 100644
+index 59d3647..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-6a6ff8f12beb194ef2fb27de7c4594bfed44088b
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha256
+deleted file mode 100644
+index 1e38ef5..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-7ddd030c89cc685a0061c3ec5340140161fd1fab1df7859699b23ad64a4fbd6f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha512
+deleted file mode 100644
+index 095be6a..0000000
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-0bf0740d048ee97daaa8771e6a8ca340a59b68e2d4c0f5e9feeb090b87a059c2ecfc993592d26c409a2fb5ea28c839846ea5567c7abde8b5e285e3c742ee1987
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.md5
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.md5
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.md5
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha1
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha1
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha1
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha256
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha256
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha256
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha512
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-debug-sources.jar.sha512
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug-sources.jar.sha512
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar
+new file mode 100644
+index 0000000..1833734
+Binary files /dev/null and b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.md5
+new file mode 100644
+index 0000000..3f2a037
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.md5
+@@ -0,0 +1 @@
++e0c3348f8ae270e7192a5a7d8bf091bc
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha1
+new file mode 100644
+index 0000000..343e98e
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha1
+@@ -0,0 +1 @@
++25b9ca461795c654dc3d6dbb4bbf8aa36ac625e6
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha256
+new file mode 100644
+index 0000000..f135ee5
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha256
+@@ -0,0 +1 @@
++1d8f84ae7573abdfea1e9e8de8f7b1102a4c876ba37a4185f52704a92a4e8b97
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha512
+new file mode 100644
+index 0000000..009806b
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-debug.aar.sha512
+@@ -0,0 +1 @@
++a39b8674c5cb2d7d0a58de59f666fe29916ea848070f74b2a5267c4ee37705bdf92d56aa857641d5fd802def8a363860542ed302c07c2b9dc01b3be89095cef2
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.md5
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.md5
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.md5
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha1
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha1
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha1
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha256
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha256
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha256
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha512
+similarity index 100%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5-release-sources.jar.sha512
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release-sources.jar.sha512
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar
+new file mode 100644
+index 0000000..8ef07d4
+Binary files /dev/null and b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.md5
+new file mode 100644
+index 0000000..29dcf92
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.md5
+@@ -0,0 +1 @@
++1b368fb04a58413d4d15c1306585ea73
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha1
+new file mode 100644
+index 0000000..1616cac
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha1
+@@ -0,0 +1 @@
++2963075b5cd36f953f56cf38f21662c07d6d97fe
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha256
+new file mode 100644
+index 0000000..8499d20
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha256
+@@ -0,0 +1 @@
++7fbb96dc4c5ec5c3f88d05dcbcf6256c4e6c31ee339dcd0614cde21b569ce789
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha512
+new file mode 100644
+index 0000000..bdff6a8
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8-release.aar.sha512
+@@ -0,0 +1 @@
++b62615e2bf58f81af684ebd5fd8c484c5bf46ec7fccac43c1710a641a89439b8ef906b447fef21b35c6a4dd8e120b21faeaca13d879f4bb20a7b18ebc1b58043
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module
+similarity index 68%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module
+index 69ed68f..b24f9af 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.module
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module
+@@ -3,7 +3,7 @@
+   "component": {
+     "group": "com.facebook.react",
+     "module": "hermes-engine",
+-    "version": "0.70.5",
++    "version": "0.70.8",
+     "attributes": {
+       "org.gradle.status": "release"
+     }
+@@ -25,13 +25,13 @@
+       },
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-debug.aar",
+-          "url": "hermes-engine-0.70.5-debug.aar",
+-          "size": 4033701,
+-          "sha512": "ccbb56a7ba17357aa68c9ba685f118acae462481c186ba2e18a5dff3a779fb6cf1b6557965777282625b1fea8a82336ee3d6166d226ac494413770ade3369402",
+-          "sha256": "98edd89a8c6b428921a71c83353b7c2ead7561ef78390d3d2f8bdec7ea0bccba",
+-          "sha1": "f246204e16175a16e94ddab8556b5980c6241d14",
+-          "md5": "8f67048d84e52b2c37b14459567a5a9d"
++          "name": "hermes-engine-0.70.8-debug.aar",
++          "url": "hermes-engine-0.70.8-debug.aar",
++          "size": 4033716,
++          "sha512": "a39b8674c5cb2d7d0a58de59f666fe29916ea848070f74b2a5267c4ee37705bdf92d56aa857641d5fd802def8a363860542ed302c07c2b9dc01b3be89095cef2",
++          "sha256": "1d8f84ae7573abdfea1e9e8de8f7b1102a4c876ba37a4185f52704a92a4e8b97",
++          "sha1": "25b9ca461795c654dc3d6dbb4bbf8aa36ac625e6",
++          "md5": "e0c3348f8ae270e7192a5a7d8bf091bc"
+         }
+       ]
+     },
+@@ -76,13 +76,13 @@
+       ],
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-debug.aar",
+-          "url": "hermes-engine-0.70.5-debug.aar",
+-          "size": 4033701,
+-          "sha512": "ccbb56a7ba17357aa68c9ba685f118acae462481c186ba2e18a5dff3a779fb6cf1b6557965777282625b1fea8a82336ee3d6166d226ac494413770ade3369402",
+-          "sha256": "98edd89a8c6b428921a71c83353b7c2ead7561ef78390d3d2f8bdec7ea0bccba",
+-          "sha1": "f246204e16175a16e94ddab8556b5980c6241d14",
+-          "md5": "8f67048d84e52b2c37b14459567a5a9d"
++          "name": "hermes-engine-0.70.8-debug.aar",
++          "url": "hermes-engine-0.70.8-debug.aar",
++          "size": 4033716,
++          "sha512": "a39b8674c5cb2d7d0a58de59f666fe29916ea848070f74b2a5267c4ee37705bdf92d56aa857641d5fd802def8a363860542ed302c07c2b9dc01b3be89095cef2",
++          "sha256": "1d8f84ae7573abdfea1e9e8de8f7b1102a4c876ba37a4185f52704a92a4e8b97",
++          "sha1": "25b9ca461795c654dc3d6dbb4bbf8aa36ac625e6",
++          "md5": "e0c3348f8ae270e7192a5a7d8bf091bc"
+         }
+       ]
+     },
+@@ -97,8 +97,8 @@
+       },
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-debug-sources.jar",
+-          "url": "hermes-engine-0.70.5-debug-sources.jar",
++          "name": "hermes-engine-0.70.8-debug-sources.jar",
++          "url": "hermes-engine-0.70.8-debug-sources.jar",
+           "size": 62707,
+           "sha512": "b6d659b87a103dd21026d8715420d047b70e76219d39121795598811cff2c7bb6cf3a860d8836fe6eeb753f785d7c2f7b961ea48c5cba27626a6e1cb5b07ee62",
+           "sha256": "1fe6791aeefb0391d319d763c655a6f8232676141b886d0a467b8834a0b86497",
+@@ -118,13 +118,13 @@
+       },
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-release.aar",
+-          "url": "hermes-engine-0.70.5-release.aar",
+-          "size": 3458378,
+-          "sha512": "f114d26c0c757a2a333423738861dfcd225a790ba97a3a140e21cd131e9cf1c8cdc9e78372c735b6dc8f8ca004cf38e7b75b3c07afef5230fba7b57e71d332b3",
+-          "sha256": "3cf7d55a8e2a610cb293d91acc90881114df0150aea5bb19b2df78158c331134",
+-          "sha1": "6d67ef0ee827fb500c5dae6e8de8497b7513b51f",
+-          "md5": "4eea565acfa26284caefb83ea547a27d"
++          "name": "hermes-engine-0.70.8-release.aar",
++          "url": "hermes-engine-0.70.8-release.aar",
++          "size": 3458393,
++          "sha512": "b62615e2bf58f81af684ebd5fd8c484c5bf46ec7fccac43c1710a641a89439b8ef906b447fef21b35c6a4dd8e120b21faeaca13d879f4bb20a7b18ebc1b58043",
++          "sha256": "7fbb96dc4c5ec5c3f88d05dcbcf6256c4e6c31ee339dcd0614cde21b569ce789",
++          "sha1": "2963075b5cd36f953f56cf38f21662c07d6d97fe",
++          "md5": "1b368fb04a58413d4d15c1306585ea73"
+         }
+       ]
+     },
+@@ -169,13 +169,13 @@
+       ],
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-release.aar",
+-          "url": "hermes-engine-0.70.5-release.aar",
+-          "size": 3458378,
+-          "sha512": "f114d26c0c757a2a333423738861dfcd225a790ba97a3a140e21cd131e9cf1c8cdc9e78372c735b6dc8f8ca004cf38e7b75b3c07afef5230fba7b57e71d332b3",
+-          "sha256": "3cf7d55a8e2a610cb293d91acc90881114df0150aea5bb19b2df78158c331134",
+-          "sha1": "6d67ef0ee827fb500c5dae6e8de8497b7513b51f",
+-          "md5": "4eea565acfa26284caefb83ea547a27d"
++          "name": "hermes-engine-0.70.8-release.aar",
++          "url": "hermes-engine-0.70.8-release.aar",
++          "size": 3458393,
++          "sha512": "b62615e2bf58f81af684ebd5fd8c484c5bf46ec7fccac43c1710a641a89439b8ef906b447fef21b35c6a4dd8e120b21faeaca13d879f4bb20a7b18ebc1b58043",
++          "sha256": "7fbb96dc4c5ec5c3f88d05dcbcf6256c4e6c31ee339dcd0614cde21b569ce789",
++          "sha1": "2963075b5cd36f953f56cf38f21662c07d6d97fe",
++          "md5": "1b368fb04a58413d4d15c1306585ea73"
+         }
+       ]
+     },
+@@ -190,8 +190,8 @@
+       },
+       "files": [
+         {
+-          "name": "hermes-engine-0.70.5-release-sources.jar",
+-          "url": "hermes-engine-0.70.5-release-sources.jar",
++          "name": "hermes-engine-0.70.8-release-sources.jar",
++          "url": "hermes-engine-0.70.8-release-sources.jar",
+           "size": 62694,
+           "sha512": "205a0fd395d6d02c27c4611ae1ceca7ccb4f3554f17f44d338f9ffef2e3521e933616e74ac1b17bb7d300891ede5ecf58e966a11becda27f6760f862f2316783",
+           "sha256": "e622d9a7db5ba1a2161785ab8745dda58d1012aad04f7f9489fce207cf567f8a",
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.md5
+new file mode 100644
+index 0000000..dc54b1e
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.md5
+@@ -0,0 +1 @@
++c13e29ae1cf9f357e0e6b816296375f3
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha1
+new file mode 100644
+index 0000000..eb5f219
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha1
+@@ -0,0 +1 @@
++e1d6f65da36566f11101575ed37224176352c5e9
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha256
+new file mode 100644
+index 0000000..f515509
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha256
+@@ -0,0 +1 @@
++3e426ed31d3b9d55b4033b8f7218189e29a6ff5f55c002b6d422f28565e4774c
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha512
+new file mode 100644
+index 0000000..8a10e81
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.module.sha512
+@@ -0,0 +1 @@
++2ca49925a558b87e2a915560b97751e3f2f6e7cc24d04b28b701ed6e986793b6c693f09cb233245e22a13526daee8d743c1d22ee7f1f6f7b2f78959871fc22f4
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom
+similarity index 98%
+rename from node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom
+rename to node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom
+index a7dd4cd..801d8f6 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.5/hermes-engine-0.70.5.pom
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom
+@@ -9,7 +9,7 @@
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.facebook.react</groupId>
+   <artifactId>hermes-engine</artifactId>
+-  <version>0.70.5</version>
++  <version>0.70.8</version>
+   <packaging>pom</packaging>
+   <dependencies>
+     <dependency>
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.md5
+new file mode 100644
+index 0000000..c9d1c4e
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.md5
+@@ -0,0 +1 @@
++ee516ea35c1eea0e4a0d7ed32e8b58d2
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha1
+new file mode 100644
+index 0000000..4d126fc
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha1
+@@ -0,0 +1 @@
++c3823b6e1647ee89a72aac5ddd9b9542230ce168
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha256
+new file mode 100644
+index 0000000..9306ec0
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha256
+@@ -0,0 +1 @@
++b18b2dc6c654f62fe15c8b9651cc4f6cb108801f3fa25a47c3a581c70f1c89de
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha512
+new file mode 100644
+index 0000000..db7f88e
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/0.70.8/hermes-engine-0.70.8.pom.sha512
+@@ -0,0 +1 @@
++c899d07f700010ed8039d624b9761ffaa8152636b22689e02a27a589e13fb3244f1e77ddae104a0552151494c58a3e708555fbab4b534906c3ea3ea54bf5202f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml
+index ec4d790..1066997 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml
+@@ -3,11 +3,11 @@
+   <groupId>com.facebook.react</groupId>
+   <artifactId>hermes-engine</artifactId>
+   <versioning>
+-    <latest>0.70.5</latest>
+-    <release>0.70.5</release>
++    <latest>0.70.8</latest>
++    <release>0.70.8</release>
+     <versions>
+-      <version>0.70.5</version>
++      <version>0.70.8</version>
+     </versions>
+-    <lastUpdated>20221106211107</lastUpdated>
++    <lastUpdated>20230404102903</lastUpdated>
+   </versioning>
+ </metadata>
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.md5 b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.md5
+index 058ad36..38809b2 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.md5
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.md5
+@@ -1 +1 @@
+-d696a517f905ef03db049e3498bed1d8
+\ No newline at end of file
++ded272268fafbee8cfec1c4cf949b89e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha1 b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha1
+index a0452b3..a338925 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha1
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha1
+@@ -1 +1 @@
+-62474f1140166dd5b0cdb3a0433691fd413f6cc7
+\ No newline at end of file
++db1bd77d790c36a462e3e3af18d7432420d47b1b
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha256 b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha256
+index 2850bd6..1a67680 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha256
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha256
+@@ -1 +1 @@
+-3e3e01b6b286761657f01a1a0b92386e2532badb0ceca6d54a29dfc032a00bfd
+\ No newline at end of file
++dd5d6923c18c6de13066b85403238464c809148c090ab6c35b1a0ecee97c478f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha512 b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha512
+index d24ae7c..d7e1090 100644
+--- a/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha512
++++ b/node_modules/react-native/android/com/facebook/react/hermes-engine/maven-metadata.xml.sha512
+@@ -1 +1 @@
+-fbaf046e2812062b9c153695d7fd934b64959de73b084611b938c80e77e9b5df91aab55de42920103f564ba9b66423ac5ab74516f7a69355a7b4a6cbd360fc53
+\ No newline at end of file
++eca945793024f6a183939bd298f3326af8ff71306b5b3c670c672bf53f315f4bd468d03f12e4ae0f60e1a258de6e2b6fb22aa9444c2c53dccf6f9026398da37b
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.md5
+deleted file mode 100644
+index e06f76c..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-74d86431fd9bc24b8769b1dcff698814
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha1
+deleted file mode 100644
+index bc68ce8..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-c64ee18787feb457f9a4f3ffc888b0f312afe16c
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha256
+deleted file mode 100644
+index 31c42cc..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-947f3bb8fe00e0d72d10eb3fe1bd00c181ee366fdf28fcd6e35794575faa1fb1
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha512
+deleted file mode 100644
+index 5fb3ee5..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-1cabc724dd44d1266c637d9db0a41e1d0d03d7b333770b173c7724bd56a318e43947bf1bd5f83734c4afdf5f695749bbb8e77c4df2268974cc23d8a7b399d179
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.md5
+deleted file mode 100644
+index 9139f2e..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-8b6106b2cab596fdcdf1de5b495419dd
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha1
+deleted file mode 100644
+index f0a325f..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-650825ef196f2045dfe93cf7eff46ed6a9cb851e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha256
+deleted file mode 100644
+index c59430f..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-e9f11e2e7c0e95bdc8443566d9ba6cec9b9613ee09426832f38050edcf65b828
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha512
+deleted file mode 100644
+index c6ea3e1..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-a75e86a070303e119cc4875d194740bc99a70dc4c538e994fe68fd7320a47d91c1c7094bccb923e36c51231e8ce6b8d0b2665a3e9aad246a63ca073decce4a68
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.md5
+deleted file mode 100644
+index ee2919a..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-b4c3cdc59566abc5ea37bd6311ce818c
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha1
+deleted file mode 100644
+index 6e53e4d..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-3fe922c099cf22070fb5131914012269c68337e6
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha256
+deleted file mode 100644
+index 952ee0e..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-19a94e1af4190b32e8ed0a463a7deeccfb4785a03cde91b88efafee0931f9c80
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha512
+deleted file mode 100644
+index 8ba78e8..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-253ca7b3b2b6953681ce77d43c2c75bbb6f4f6699e5fba3f2fdb657fd6e12ff578bc7ba8fa27945a017354daf2ef28f6bfaf22e87d68d34625b05c57d1999368
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.md5
+deleted file mode 100644
+index 6e05aab..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-50b3e7bf5bfc3acab1e9f498f988d3f0
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha1
+deleted file mode 100644
+index 7316439..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-00c9f58ad16f8e6f11bc75ad826bf4e805f6ac69
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha256
+deleted file mode 100644
+index 8ed6644..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-591fab93fa3ff09b66748007dd4bcd4ae5f9da14bbf5ab5d6109cb1a29f9c918
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha512
+deleted file mode 100644
+index 30d86ed..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-28f0e88dcd49bd32c355f11822fe299b81d88c69f9eb2f650ee933c09aa4a88364024b44e0237821a429dc1d7af4db46d4205a86755343bef91aa163b3e5c385
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.md5
+deleted file mode 100644
+index 4cd1c36..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-c0dfc07b0961a25ba9ceb2b494f46bb6
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha1
+deleted file mode 100644
+index 57ddbe5..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-80f317430557db0de3088903d62818e3e3f9b90c
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha256
+deleted file mode 100644
+index d6e2f15..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-a99732a86b4bc51cd3e2c1d87a16bec11f45ee151c264b2873b803a571caef1e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha512
+deleted file mode 100644
+index 460164d..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-cd3ab73cec4f59e339a1f3f08a35a89e7a28bfee744e53b8eefbef873dbf96a075d46bb0de4142a0ffddfdaf4d1f139afd5108d39521fe28cd95e21068bbaf10
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.md5
+deleted file mode 100644
+index 0c566c0..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.md5
++++ /dev/null
+@@ -1 +0,0 @@
+-314aca710fcde34076ae5994d7f9b97e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha1
+deleted file mode 100644
+index 68f999a..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha1
++++ /dev/null
+@@ -1 +0,0 @@
+-6a163a1b47caaf40d6e1073ea5c7e12985e5039a
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha256
+deleted file mode 100644
+index bf2273f..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha256
++++ /dev/null
+@@ -1 +0,0 @@
+-801b36c31a6e9a37096d594bd2ab459c2506d6a25c8417e912a29af7b7d6507e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha512
+deleted file mode 100644
+index b07736b..0000000
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom.sha512
++++ /dev/null
+@@ -1 +0,0 @@
+-2b7a31bf8d9b01bc8185de8a018e469e5eea59c311e4a1cd531004b016d2218ff0c683f1c4ad904d28248fa3b58d0c54384f9b19dfedb68e82ce3d226fa10b70
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar
+similarity index 96%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar
+index f71fd28..4835280 100644
+Binary files a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug-sources.jar and b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.md5
+new file mode 100644
+index 0000000..7241ef2
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.md5
+@@ -0,0 +1 @@
++2b848225b9d497f3c7b823232ad93bcb
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha1
+new file mode 100644
+index 0000000..50b2030
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha1
+@@ -0,0 +1 @@
++d6f0e4412a7667641ffe9f5a3e0647614f767e2a
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha256
+new file mode 100644
+index 0000000..5d27935
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha256
+@@ -0,0 +1 @@
++baeedc9dd727367a4a832c828e966e1b09ec8e85780c346d053af6daab07f507
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha512
+new file mode 100644
+index 0000000..a9ff246
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug-sources.jar.sha512
+@@ -0,0 +1 @@
++2690f5eae07056b5c0da67c4f437771b5e26aad70afad3569f76f4bc9dedc4125fa4fab009ad4a53924bdacbc301c204d7f9492c7091c6cd135650778225ce9a
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar
+similarity index 98%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar
+index a324a45..c38d58b 100644
+Binary files a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-debug.aar and b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.md5
+new file mode 100644
+index 0000000..44ec726
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.md5
+@@ -0,0 +1 @@
++f49d2415714e0de19aa73634a0d6a7f6
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha1
+new file mode 100644
+index 0000000..36a26fb
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha1
+@@ -0,0 +1 @@
++889b8dfd07a4bfe8245b210a810ca89f156c9bd0
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha256
+new file mode 100644
+index 0000000..ea34e20
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha256
+@@ -0,0 +1 @@
++5d141654fce2efa8956515b334800273ec8f08f7e1be133258d168585c7e80a0
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha512
+new file mode 100644
+index 0000000..4926d1b
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-debug.aar.sha512
+@@ -0,0 +1 @@
++fc4da78d394cfd4589955d8291dc1402df3f4dd09772ee8192f9e9dd5fa9c6a73c25e97a8cdeb1a89171db7354f7b971f43637f72532be3d3a8bf2f6e6587948
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar
+similarity index 96%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar
+index d36b14f..948ee0b 100644
+Binary files a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release-sources.jar and b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.md5
+new file mode 100644
+index 0000000..62f0e5d
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.md5
+@@ -0,0 +1 @@
++e5fb250ecd0ca9d905a911af7c40482e
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha1
+new file mode 100644
+index 0000000..26b5c3a
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha1
+@@ -0,0 +1 @@
++43afd560166495924916d944716e4d3a19993bb9
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha256
+new file mode 100644
+index 0000000..354af39
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha256
+@@ -0,0 +1 @@
++59854b348a9657995685959789d7fc52dac3a4a9213ca23a98ec51022c2de582
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha512
+new file mode 100644
+index 0000000..d4e65e8
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release-sources.jar.sha512
+@@ -0,0 +1 @@
++338771312baa8023caf8007c5395246b579af304112c0f3f415e803b2c31e803fb8b8901ca94fa63a53ce981648c4e79b865b6a9f39bb8a354bc2b0881c3f400
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar
+similarity index 95%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar
+index 58113a5..4656b43 100644
+Binary files a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5-release.aar and b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar differ
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.md5
+new file mode 100644
+index 0000000..d6c6648
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.md5
+@@ -0,0 +1 @@
++e8c86045ab0ce24795c562cc332e8533
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha1
+new file mode 100644
+index 0000000..d83c0e2
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha1
+@@ -0,0 +1 @@
++1761397688e31c8c84654d8dde7e8f8089f18ab9
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha256
+new file mode 100644
+index 0000000..92629b0
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha256
+@@ -0,0 +1 @@
++c9830acd74bd655cca0b6f99b0e680d6ed9e2e689aa5cc192ef2103a520ed5be
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha512
+new file mode 100644
+index 0000000..3a14437
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8-release.aar.sha512
+@@ -0,0 +1 @@
++e8ec4b543b4a3c19cab79c8c17cf262e9729e22aa2271a2757825ac26b77bdcd75514b6af8881b15cb88d5c43495bdae442423538830d65a0e5559b58364fe94
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module
+similarity index 82%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module
+index 17928ef..9d4196f 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.module
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module
+@@ -3,7 +3,7 @@
+   "component": {
+     "group": "com.facebook.react",
+     "module": "react-native",
+-    "version": "0.70.5",
++    "version": "0.70.8",
+     "attributes": {
+       "org.gradle.status": "release"
+     }
+@@ -146,13 +146,13 @@
+       ],
+       "files": [
+         {
+-          "name": "react-native-0.70.5-debug.aar",
+-          "url": "react-native-0.70.5-debug.aar",
+-          "size": 32896271,
+-          "sha512": "a75e86a070303e119cc4875d194740bc99a70dc4c538e994fe68fd7320a47d91c1c7094bccb923e36c51231e8ce6b8d0b2665a3e9aad246a63ca073decce4a68",
+-          "sha256": "e9f11e2e7c0e95bdc8443566d9ba6cec9b9613ee09426832f38050edcf65b828",
+-          "sha1": "650825ef196f2045dfe93cf7eff46ed6a9cb851e",
+-          "md5": "8b6106b2cab596fdcdf1de5b495419dd"
++          "name": "react-native-0.70.8-debug.aar",
++          "url": "react-native-0.70.8-debug.aar",
++          "size": 32896621,
++          "sha512": "fc4da78d394cfd4589955d8291dc1402df3f4dd09772ee8192f9e9dd5fa9c6a73c25e97a8cdeb1a89171db7354f7b971f43637f72532be3d3a8bf2f6e6587948",
++          "sha256": "5d141654fce2efa8956515b334800273ec8f08f7e1be133258d168585c7e80a0",
++          "sha1": "889b8dfd07a4bfe8245b210a810ca89f156c9bd0",
++          "md5": "f49d2415714e0de19aa73634a0d6a7f6"
+         }
+       ]
+     },
+@@ -288,13 +288,13 @@
+       ],
+       "files": [
+         {
+-          "name": "react-native-0.70.5-debug.aar",
+-          "url": "react-native-0.70.5-debug.aar",
+-          "size": 32896271,
+-          "sha512": "a75e86a070303e119cc4875d194740bc99a70dc4c538e994fe68fd7320a47d91c1c7094bccb923e36c51231e8ce6b8d0b2665a3e9aad246a63ca073decce4a68",
+-          "sha256": "e9f11e2e7c0e95bdc8443566d9ba6cec9b9613ee09426832f38050edcf65b828",
+-          "sha1": "650825ef196f2045dfe93cf7eff46ed6a9cb851e",
+-          "md5": "8b6106b2cab596fdcdf1de5b495419dd"
++          "name": "react-native-0.70.8-debug.aar",
++          "url": "react-native-0.70.8-debug.aar",
++          "size": 32896621,
++          "sha512": "fc4da78d394cfd4589955d8291dc1402df3f4dd09772ee8192f9e9dd5fa9c6a73c25e97a8cdeb1a89171db7354f7b971f43637f72532be3d3a8bf2f6e6587948",
++          "sha256": "5d141654fce2efa8956515b334800273ec8f08f7e1be133258d168585c7e80a0",
++          "sha1": "889b8dfd07a4bfe8245b210a810ca89f156c9bd0",
++          "md5": "f49d2415714e0de19aa73634a0d6a7f6"
+         }
+       ]
+     },
+@@ -309,13 +309,13 @@
+       },
+       "files": [
+         {
+-          "name": "react-native-0.70.5-debug-sources.jar",
+-          "url": "react-native-0.70.5-debug-sources.jar",
+-          "size": 1044828,
+-          "sha512": "1cabc724dd44d1266c637d9db0a41e1d0d03d7b333770b173c7724bd56a318e43947bf1bd5f83734c4afdf5f695749bbb8e77c4df2268974cc23d8a7b399d179",
+-          "sha256": "947f3bb8fe00e0d72d10eb3fe1bd00c181ee366fdf28fcd6e35794575faa1fb1",
+-          "sha1": "c64ee18787feb457f9a4f3ffc888b0f312afe16c",
+-          "md5": "74d86431fd9bc24b8769b1dcff698814"
++          "name": "react-native-0.70.8-debug-sources.jar",
++          "url": "react-native-0.70.8-debug-sources.jar",
++          "size": 1045068,
++          "sha512": "2690f5eae07056b5c0da67c4f437771b5e26aad70afad3569f76f4bc9dedc4125fa4fab009ad4a53924bdacbc301c204d7f9492c7091c6cd135650778225ce9a",
++          "sha256": "baeedc9dd727367a4a832c828e966e1b09ec8e85780c346d053af6daab07f507",
++          "sha1": "d6f0e4412a7667641ffe9f5a3e0647614f767e2a",
++          "md5": "2b848225b9d497f3c7b823232ad93bcb"
+         }
+       ]
+     },
+@@ -451,13 +451,13 @@
+       ],
+       "files": [
+         {
+-          "name": "react-native-0.70.5-release.aar",
+-          "url": "react-native-0.70.5-release.aar",
+-          "size": 12614227,
+-          "sha512": "28f0e88dcd49bd32c355f11822fe299b81d88c69f9eb2f650ee933c09aa4a88364024b44e0237821a429dc1d7af4db46d4205a86755343bef91aa163b3e5c385",
+-          "sha256": "591fab93fa3ff09b66748007dd4bcd4ae5f9da14bbf5ab5d6109cb1a29f9c918",
+-          "sha1": "00c9f58ad16f8e6f11bc75ad826bf4e805f6ac69",
+-          "md5": "50b3e7bf5bfc3acab1e9f498f988d3f0"
++          "name": "react-native-0.70.8-release.aar",
++          "url": "react-native-0.70.8-release.aar",
++          "size": 12614536,
++          "sha512": "e8ec4b543b4a3c19cab79c8c17cf262e9729e22aa2271a2757825ac26b77bdcd75514b6af8881b15cb88d5c43495bdae442423538830d65a0e5559b58364fe94",
++          "sha256": "c9830acd74bd655cca0b6f99b0e680d6ed9e2e689aa5cc192ef2103a520ed5be",
++          "sha1": "1761397688e31c8c84654d8dde7e8f8089f18ab9",
++          "md5": "e8c86045ab0ce24795c562cc332e8533"
+         }
+       ]
+     },
+@@ -593,13 +593,13 @@
+       ],
+       "files": [
+         {
+-          "name": "react-native-0.70.5-release.aar",
+-          "url": "react-native-0.70.5-release.aar",
+-          "size": 12614227,
+-          "sha512": "28f0e88dcd49bd32c355f11822fe299b81d88c69f9eb2f650ee933c09aa4a88364024b44e0237821a429dc1d7af4db46d4205a86755343bef91aa163b3e5c385",
+-          "sha256": "591fab93fa3ff09b66748007dd4bcd4ae5f9da14bbf5ab5d6109cb1a29f9c918",
+-          "sha1": "00c9f58ad16f8e6f11bc75ad826bf4e805f6ac69",
+-          "md5": "50b3e7bf5bfc3acab1e9f498f988d3f0"
++          "name": "react-native-0.70.8-release.aar",
++          "url": "react-native-0.70.8-release.aar",
++          "size": 12614536,
++          "sha512": "e8ec4b543b4a3c19cab79c8c17cf262e9729e22aa2271a2757825ac26b77bdcd75514b6af8881b15cb88d5c43495bdae442423538830d65a0e5559b58364fe94",
++          "sha256": "c9830acd74bd655cca0b6f99b0e680d6ed9e2e689aa5cc192ef2103a520ed5be",
++          "sha1": "1761397688e31c8c84654d8dde7e8f8089f18ab9",
++          "md5": "e8c86045ab0ce24795c562cc332e8533"
+         }
+       ]
+     },
+@@ -614,13 +614,13 @@
+       },
+       "files": [
+         {
+-          "name": "react-native-0.70.5-release-sources.jar",
+-          "url": "react-native-0.70.5-release-sources.jar",
+-          "size": 1044810,
+-          "sha512": "253ca7b3b2b6953681ce77d43c2c75bbb6f4f6699e5fba3f2fdb657fd6e12ff578bc7ba8fa27945a017354daf2ef28f6bfaf22e87d68d34625b05c57d1999368",
+-          "sha256": "19a94e1af4190b32e8ed0a463a7deeccfb4785a03cde91b88efafee0931f9c80",
+-          "sha1": "3fe922c099cf22070fb5131914012269c68337e6",
+-          "md5": "b4c3cdc59566abc5ea37bd6311ce818c"
++          "name": "react-native-0.70.8-release-sources.jar",
++          "url": "react-native-0.70.8-release-sources.jar",
++          "size": 1045050,
++          "sha512": "338771312baa8023caf8007c5395246b579af304112c0f3f415e803b2c31e803fb8b8901ca94fa63a53ce981648c4e79b865b6a9f39bb8a354bc2b0881c3f400",
++          "sha256": "59854b348a9657995685959789d7fc52dac3a4a9213ca23a98ec51022c2de582",
++          "sha1": "43afd560166495924916d944716e4d3a19993bb9",
++          "md5": "e5fb250ecd0ca9d905a911af7c40482e"
+         }
+       ]
+     }
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.md5
+new file mode 100644
+index 0000000..4c68e99
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.md5
+@@ -0,0 +1 @@
++33f69983d07b4a9ec4ac25c8047d49fe
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha1
+new file mode 100644
+index 0000000..249f0f9
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha1
+@@ -0,0 +1 @@
++43931561be1203506d409b1681d189537b41e73f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha256
+new file mode 100644
+index 0000000..0fadddb
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha256
+@@ -0,0 +1 @@
++fdf33321c6a4f6622d48af107f779d7d531a47bf16bbde90ca811c9eddd53213
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha512
+new file mode 100644
+index 0000000..463b8bd
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.module.sha512
+@@ -0,0 +1 @@
++53249317acfe3a44c31ae896b9a40bc8160a0c0ebbacfa5042b2d5c0cef3393c11af5dc06053f5570eaae2ca1a0d62534e23af08d20c88700bae93a6cd0074d4
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom
+similarity index 99%
+rename from node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom
+rename to node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom
+index 242c546..fbcb90b 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/0.70.5/react-native-0.70.5.pom
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom
+@@ -9,7 +9,7 @@
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.facebook.react</groupId>
+   <artifactId>react-native</artifactId>
+-  <version>0.70.5</version>
++  <version>0.70.8</version>
+   <packaging>pom</packaging>
+   <name>ReactNative</name>
+   <description>A framework for building native apps with React</description>
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.md5 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.md5
+new file mode 100644
+index 0000000..a91b5b9
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.md5
+@@ -0,0 +1 @@
++844f2ee0409ca040e54d85f246396fef
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha1
+new file mode 100644
+index 0000000..1ef42cc
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha1
+@@ -0,0 +1 @@
++5a3135a4af55ccfc43fa44f566757242cef9930d
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha256
+new file mode 100644
+index 0000000..5bc7cb9
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha256
+@@ -0,0 +1 @@
++60be4e6d3f1b6736413c9fb3c958ddb355324844522cc93a9d2f24c0b4d07e8c
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha512
+new file mode 100644
+index 0000000..1bcd3ae
+--- /dev/null
++++ b/node_modules/react-native/android/com/facebook/react/react-native/0.70.8/react-native-0.70.8.pom.sha512
+@@ -0,0 +1 @@
++e481d1bbc1144a9a2a57a67be99b1c281dfba3facc591ab9cabeadeea7c2008e43cef483075e23c061b96f34ebf46a32cc6ea38321f7b17d094a707a2186a394
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml
+index 1c5ffff..3a290a7 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml
++++ b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml
+@@ -3,11 +3,11 @@
+   <groupId>com.facebook.react</groupId>
+   <artifactId>react-native</artifactId>
+   <versioning>
+-    <latest>0.70.5</latest>
+-    <release>0.70.5</release>
++    <latest>0.70.8</latest>
++    <release>0.70.8</release>
+     <versions>
+-      <version>0.70.5</version>
++      <version>0.70.8</version>
+     </versions>
+-    <lastUpdated>20221106211052</lastUpdated>
++    <lastUpdated>20230404102843</lastUpdated>
+   </versioning>
+ </metadata>
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.md5 b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.md5
+index 5519167..982bf9b 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.md5
++++ b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.md5
+@@ -1 +1 @@
+-2fd397e2d08ed150f66851e1e34dd67e
+\ No newline at end of file
++042d5fddc2a8dd8564a71036d5414863
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha1 b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha1
+index a853b16..64afc6e 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha1
++++ b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha1
+@@ -1 +1 @@
+-d4efb834e0463c9149216b52f559ffbb81710ece
+\ No newline at end of file
++769117a6ee061cb70af00a9ffab2bbb6400f3770
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha256 b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha256
+index aaf8473..f4a363a 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha256
++++ b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha256
+@@ -1 +1 @@
+-e3a583f456c35a1bd17a05d4627fec2fa5c7d80ea095f5d6d24c13b98b341453
+\ No newline at end of file
++aa414a776ef0bc7695370e3fdf0a7ef443a63909ec9015a70d197824e6488d5f
+\ No newline at end of file
+diff --git a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha512 b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha512
+index 3376915..020cd70 100644
+--- a/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha512
++++ b/node_modules/react-native/android/com/facebook/react/react-native/maven-metadata.xml.sha512
+@@ -1 +1 @@
+-4b9cfbc4aed81b138b7942f7488f450c4475d60f0d352f9e67b54e38879873e7f78ee744835d46be66ba32925244d4916add618897b45180381fb95bb8082cd6
+\ No newline at end of file
++dab8e635694dcca07d1bc9ca5d7831981903f943bea4f90cc680482bc29dd62cad78161d846362f1545c1b845bca6f5df05ce99af87b1b467d24bc6e37c8fe08
+\ No newline at end of file
+diff --git a/node_modules/react-native/index.js b/node_modules/react-native/index.js
+index d59ba34..bf5431a 100644
+--- a/node_modules/react-native/index.js
++++ b/node_modules/react-native/index.js
+@@ -435,32 +435,36 @@ module.exports = {
+   },
+   // Deprecated Prop Types
+   get ColorPropType(): $FlowFixMe {
+-    invariant(
+-      false,
+-      'ColorPropType has been removed from React Native. Migrate to ' +
+-        "ColorPropType exported from 'deprecated-react-native-prop-types'.",
+-    );
++    // invariant(
++    //   false,
++    //   'ColorPropType has been removed from React Native. Migrate to ' +
++    //     "ColorPropType exported from 'deprecated-react-native-prop-types'.",
++    // );
++    return require('deprecated-react-native-prop-types').ColorPropType
+   },
+   get EdgeInsetsPropType(): $FlowFixMe {
+-    invariant(
+-      false,
+-      'EdgeInsetsPropType has been removed from React Native. Migrate to ' +
+-        "EdgeInsetsPropType exported from 'deprecated-react-native-prop-types'.",
+-    );
++    // invariant(
++    //   false,
++    //   'EdgeInsetsPropType has been removed from React Native. Migrate to ' +
++    //     "EdgeInsetsPropType exported from 'deprecated-react-native-prop-types'.",
++    // );
++    return require('deprecated-react-native-prop-types').EdgeInsetsPropType
+   },
+   get PointPropType(): $FlowFixMe {
+-    invariant(
+-      false,
+-      'PointPropType has been removed from React Native. Migrate to ' +
+-        "PointPropType exported from 'deprecated-react-native-prop-types'.",
+-    );
++    // invariant(
++    //   false,
++    //   'PointPropType has been removed from React Native. Migrate to ' +
++    //     "PointPropType exported from 'deprecated-react-native-prop-types'.",
++    // );
++    return require('deprecated-react-native-prop-types').PointPropType
+   },
+   get ViewPropTypes(): $FlowFixMe {
+-    invariant(
+-      false,
+-      'ViewPropTypes has been removed from React Native. Migrate to ' +
+-        "ViewPropTypes exported from 'deprecated-react-native-prop-types'.",
+-    );
++    // invariant(
++    //   false,
++    //   'ViewPropTypes has been removed from React Native. Migrate to ' +
++    //     "ViewPropTypes exported from 'deprecated-react-native-prop-types'.",
++    // );
++    return require('deprecated-react-native-prop-types').ViewPropTypes
+   },
+ };
+ 
+diff --git a/node_modules/react-native/scripts/cocoapods/codegen.rb b/node_modules/react-native/scripts/cocoapods/codegen.rb
+index 9e14403..fdf6a84 100644
+--- a/node_modules/react-native/scripts/cocoapods/codegen.rb
++++ b/node_modules/react-native/scripts/cocoapods/codegen.rb
+@@ -79,6 +79,7 @@ def run_codegen!(
+   folly_version: '2021.07.22.00',
+   codegen_utils: CodegenUtils.new()
+   )
++
+   if new_arch_enabled
+     codegen_utils.use_react_native_codegen_discovery!(
+       disable_codegen,
+diff --git a/node_modules/react-native/scripts/cocoapods/codegen_utils.rb b/node_modules/react-native/scripts/cocoapods/codegen_utils.rb
+index 6fcbb15..a6e0502 100644
+--- a/node_modules/react-native/scripts/cocoapods/codegen_utils.rb
++++ b/node_modules/react-native/scripts/cocoapods/codegen_utils.rb
+@@ -60,6 +60,13 @@ class CodegenUtils
+         @@REACT_CODEGEN_PODSPEC_GENERATED = true
+     end
+ 
++    # This function returns the min iOS version supported by React Native
++    # By using this function, you won't have to manually change your Podfile
++    # when we change the minimum version supported by the framework.
++    def min_ios_version_supported
++      return '12.4'
++    end
++
+     # It generates the podspec object that represents the `React-Codegen.podspec` file
+     #
+     # Parameters
+@@ -84,7 +91,7 @@ class CodegenUtils
+           'source' => { :git => '' },
+           'header_mappings_dir' => './',
+           'platforms' => {
+-            'ios' => '11.0',
++            'ios' => min_ios_version_supported,
+           },
+           'source_files' => "**/*.{h,mm,cpp}",
+           'pod_target_xcconfig' => { "HEADER_SEARCH_PATHS" =>
+@@ -280,4 +287,25 @@ class CodegenUtils
+ 
+       CodegenUtils.set_react_codegen_discovery_done(true)
+     end
++
++    @@CLEANUP_DONE = false
++
++    def self.set_cleanup_done(newValue)
++      @@CLEANUP_DONE = newValue
++    end
++
++    def self.cleanup_done
++      return @@CLEANUP_DONE
++    end
++
++    def self.clean_up_build_folder(app_path, codegen_dir)
++      return if CodegenUtils.cleanup_done()
++      CodegenUtils.set_cleanup_done(true)
++
++      codegen_path = File.join(app_path, codegen_dir)
++      return if !Dir.exist?(codegen_path)
++
++      FileUtils.rm_rf(Dir.glob("#{codegen_path}/*"))
++      CodegenUtils.set_cleanup_done(true)
++    end
+ end
+diff --git a/node_modules/react-native/scripts/react_native_pods.rb b/node_modules/react-native/scripts/react_native_pods.rb
+index ce41a8e..1d78993 100644
+--- a/node_modules/react-native/scripts/react_native_pods.rb
++++ b/node_modules/react-native/scripts/react_native_pods.rb
+@@ -43,6 +43,8 @@ def use_react_native! (
+   app_path: '..',
+   config_file_dir: '')
+ 
++  CodegenUtils.clean_up_build_folder(app_path, $CODEGEN_OUTPUT_DIR)
++
+   prefix = path
+ 
+   # The version of folly that must be used
+diff --git a/node_modules/react-native/sdks/hermesc/osx-bin/hermesc b/node_modules/react-native/sdks/hermesc/osx-bin/hermesc
+index 8ad3252..0c6674c 100644
+Binary files a/node_modules/react-native/sdks/hermesc/osx-bin/hermesc and b/node_modules/react-native/sdks/hermesc/osx-bin/hermesc differ
+diff --git a/node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe b/node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe
+index ede985c..c87ddef 100644
+Binary files a/node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe and b/node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe differ
+diff --git a/node_modules/react-native/template/Gemfile b/node_modules/react-native/template/Gemfile
+index 5efda89..1142b1b 100644
+--- a/node_modules/react-native/template/Gemfile
++++ b/node_modules/react-native/template/Gemfile
+@@ -1,6 +1,6 @@
+ source 'https://rubygems.org'
+ 
+ # You may use http://rbenv.org/ or https://rvm.io/ to install and use this version
+-ruby '2.7.5'
++ruby '>= 2.6.10'
+ 
+-gem 'cocoapods', '~> 1.11', '>= 1.11.2'
++gem 'cocoapods', '>= 1.11.3'
+diff --git a/node_modules/react-native/template/_ruby-version b/node_modules/react-native/template/_ruby-version
+deleted file mode 100644
+index a603bb5..0000000
+--- a/node_modules/react-native/template/_ruby-version
++++ /dev/null
+@@ -1 +0,0 @@
+-2.7.5
+diff --git a/node_modules/react-native/template/package.json b/node_modules/react-native/template/package.json
+index c291cd1..4793d52 100644
+--- a/node_modules/react-native/template/package.json
++++ b/node_modules/react-native/template/package.json
+@@ -11,7 +11,7 @@
+   },
+   "dependencies": {
+     "react": "18.1.0",
+-    "react-native": "0.70.5"
++    "react-native": "0.70.8"
+   },
+   "devDependencies": {
+     "@babel/core": "^7.12.9",
