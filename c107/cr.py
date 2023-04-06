@@ -86,4 +86,4 @@ while True:
         break
 
 video.release()
-cv2.destroyALLwindows()
+cv2.destroyAllwindows()
