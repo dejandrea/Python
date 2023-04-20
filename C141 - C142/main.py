@@ -46,6 +46,15 @@ def liked_movie():
         "status": "success"
     })
 
+@app.route('/liked')
+def liked():
+    global liked_movies    
+
+    return jsonify({
+        'data' : liked_movies , 
+        'status' : 'success'
+    })
+
 #rota para descurtir o filme atual
 @app.route("/dislike")
 def unliked_movie():

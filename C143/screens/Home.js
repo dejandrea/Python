@@ -92,14 +92,16 @@ export default class HomeScreen extends Component {
 
           <View style={styles.subContainer}>
             <View style={styles.posterContainer}>
-              <Image style={styles.posterImage} source={{ uri: poster_link }} />
+              {/* <Image style={styles.posterImage} source={{ uri: poster_link }} /> */}
             </View>
 
             <View style={{ flex: 0.15 }}>
               <View style={styles.detailsContainer}>
-                <Text style={styles.title}>{original_title}</Text>
+                <Text style={styles.title}>
+                  {/* {original_title} */}
+                  </Text>
                 <Text style={styles.subtitle}>
-                  {release_date.split("-")[0]} | {duration} mins
+                  {/* {release_date.split("-")[0]} | {duration} mins */}
                 </Text>
               </View>
             </View>
